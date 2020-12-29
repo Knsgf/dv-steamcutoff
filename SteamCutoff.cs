@@ -109,7 +109,9 @@ namespace DvMod.SteamCutoff
 
                 var exhaustFlow = cylinderMassFlow + blowerMassFlow;
                 HeadsUpDisplayBridge.instance?.UpdateExhaustFlow(loco, exhaustFlow);
-                var oxygenSupplyFlow = state.SetOxygenSupply(exhaustFlow, Mathf.Lerp(0.05f, 1f, __instance.draft.value));
+                var oxygenSupplyFlow = state.SetOxygenSupply(
+                    exhaustFlow,
+                    Mathf.Lerp(0.05f, 1f, __instance.draft.value) + Mathf.Lerp(0.05f, 1f, __instance.fireDoorOpen.value));
                 HeadsUpDisplayBridge.instance?.UpdateOxygenSupply(loco, oxygenSupplyFlow);
 
                 if (__instance.fireOn.value == 1f && __instance.coalbox.value > 0f)
@@ -125,6 +127,7 @@ namespace DvMod.SteamCutoff
                     __instance.fireOn.SetNextValue(0.0f);
                     __instance.coalConsumptionRate = 0.0f;
                 }
+
                 return false;
             }
         }
@@ -164,7 +167,10 @@ namespace DvMod.SteamCutoff
                 float waterHeatingEnergy = (SteamTables.BoilingPoint(__instance.boilerPressure.value) - 15f) * waterAdded; // kJ
 
                 // evaporation
-                float heatEnergyFromCoal = __instance.fireOn.value > 0 ? state.HeatYieldRate() * (deltaTime / __instance.timeMult) : 0; // in kJ
+                HeadsUpDisplayBridge.instance?.UpdateHeatYieldRate(loco, state.HeatYieldRate());
+                var heatYieldRate = state.SmoothedHeatYieldRate(__instance.fireOn.value > 0);
+                __instance.temperature.SetNextValue(Mathf.Lerp(0, 1200, Mathf.Pow(Mathf.InverseLerp(0, 20e3f, heatYieldRate), 0.4f)));
+                float heatEnergyFromCoal = heatYieldRate * (deltaTime / __instance.timeMult); // in kJ
                 // Main.DebugLog($"time={deltaTime / __instance.timeMult}, heatRate={state.HeatYieldRate()} kW, heatEnergy={heatEnergyFromCoal} kJ, r={SteamTables.SpecificEnthalpyOfVaporization(__instance)}");
                 float evaporationMass = Mathf.Max(heatEnergyFromCoal - waterHeatingEnergy, 0f) / SteamTables.SpecificEnthalpyOfVaporization(__instance);
                 HeadsUpDisplayBridge.instance?.UpdateWaterEvap(loco, evaporationMass / (deltaTime / __instance.timeMult));
@@ -192,7 +198,7 @@ namespace DvMod.SteamCutoff
                 else if (__instance.boilerPressure.value <= (settings.safetyValveThreshold - SAFETY_VALVE_BLOWOFF) && __instance.safetyPressureValve.value == 1f)
                     __instance.safetyPressureValve.SetNextValue(0f);
                 if (__instance.safetyPressureValve.value == 1f)
-                    __instance.boilerPressure.AddNextValue(-__instance.safetyPressureValve.value * 5.0f * deltaTime);
+                    __instance.boilerPressure.AddNextValue(-__instance.safetyPressureValve.value * 10.0f * deltaTime);
 
                 // passive leakage
                 __instance.pressureLeakMultiplier = Mathf.Lerp(
