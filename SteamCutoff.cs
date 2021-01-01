@@ -68,10 +68,12 @@ namespace DvMod.SteamCutoff
 
         public class Settings : UnityModManager.ModSettings, IDrawable
         {
+            [Draw("Max boiler pressure")] public float safetyValveThreshold = 14f;
             [Draw("Boiler steam generation rate")] public float steamGenerationRate = 0.5f;
             [Draw("Water consumption multiplier")] public float waterConsumptionMultiplier = 4.0f;
+            [Draw("Max cut-off")] public float maxCutoff = 0.75f;
+            [Draw("Min cut-off")] public float minCutoff = 0.06f;
             [Draw("Cutoff wheel gamma")] public float cutoffGamma = 1.9f;
-            [Draw("Max boiler pressure")] public float safetyValveThreshold = 14f;
 
             [Draw("Enable detailed low-speed simulation")] public bool enableLowSpeedSimulation = true;
             [Draw("Low-speed simulation transition start", VisibleOn = "enableLowSpeedSimulation|true")]
@@ -147,7 +149,7 @@ namespace DvMod.SteamCutoff
                 if (__instance.temperature.value >= boilingPoint && __instance.boilerWater.value > 0.0f)
                 {
                     float excessTemp = __instance.temperature.value - boilingPoint;
-                    float evaporationLiters = BASE_EVAPORATION_RATE * excessTemp * deltaTime * settings.steamGenerationRate;
+                    float evaporationLiters = BASE_EVAPORATION_RATE * excessTemp * deltaTime;
                     __instance.boilerWater.AddNextValue(-evaporationLiters * settings.waterConsumptionMultiplier);
 
                     // P1*V = n1*RT -> P1/n1 = RT/V = P2/n2
@@ -159,7 +161,7 @@ namespace DvMod.SteamCutoff
                     //    = P1 + evapMol / V * RT
                     const float WATER_MOL_PER_L = 55.55f;
                     const float IDEAL_GAS_R = 8.3145e-2f; // L*bar/mol/K
-                    float pressureGain = WATER_MOL_PER_L * evaporationLiters * (boilingPoint + 273.15f) *
+                    float pressureGain = WATER_MOL_PER_L * (evaporationLiters * settings.steamGenerationRate) * (boilingPoint + 273.15f) *
                         IDEAL_GAS_R / BoilerSteamVolume(__instance.boilerWater.value);
                     __instance.boilerPressure.AddNextValue(pressureGain);
 
@@ -195,6 +197,8 @@ namespace DvMod.SteamCutoff
         private static class SimulateCylinderPatch
         {
             private const float SINUSOID_AVERAGE = 2f / Mathf.PI;
+            private const float STEAM_ADIABATIC_INDEX = 1.33f, MIN_STEAM_TEMPEARTURE_K = 380.0f;
+            
             private static float InstantaneousCylinderPowerRatio(float cutoff, float pistonPosition)
             {
                 float pressureRatio = pistonPosition <= cutoff ? 1f : cutoff / pistonPosition;
@@ -224,21 +228,26 @@ namespace DvMod.SteamCutoff
                     InstantaneousCylinderPowerRatio(cutoff, pistonPosition2);
             }
 
-            private static float AveragePowerRatio(float cutoff)
+            private static float AveragePowerRatio(float cutoff, float cylinderSteamTemp)
             {
-                float injectionPower = cutoff;
-                float expansionPower = cutoff * -Mathf.Log(cutoff);
-                return injectionPower + expansionPower;
+                float cylinderExpansionRatio     = 1f / cutoff;
+                float condensationExpansionRatio = Mathf.Pow((cylinderSteamTemp + 273.15f) / MIN_STEAM_TEMPEARTURE_K, 1f / (STEAM_ADIABATIC_INDEX - 1f));
+                float expansionRatio             = Mathf.Min(cylinderExpansionRatio, condensationExpansionRatio);
+                if (expansionRatio <= 1f)
+                    return cutoff;
+                float meanExpansionPower = (Mathf.Pow(expansionRatio, 1f - STEAM_ADIABATIC_INDEX) - 1f) 
+                    / ((1f - STEAM_ADIABATIC_INDEX) * (expansionRatio - 1f));
+                return cutoff * ((expansionRatio - 1) * meanExpansionPower + 1f);
             }
 
-            private static float PowerRatio(float cutoff, float speed, float revolution)
+            private static float PowerRatio(float cutoff, float speed, float revolution, float cylinderSteamTemp)
             {
                 if (!settings.enableLowSpeedSimulation)
-                    return AveragePowerRatio(cutoff);
+                    return AveragePowerRatio(cutoff, cylinderSteamTemp);
 
                 return Mathf.Lerp(
                     InstantaneousPowerRatio(cutoff, revolution),
-                    AveragePowerRatio(cutoff),
+                    AveragePowerRatio(cutoff, cylinderSteamTemp),
                     (speed - settings.lowSpeedTransitionStart) /
                     settings.lowSpeedTransitionWidth);
             }
@@ -249,7 +258,8 @@ namespace DvMod.SteamCutoff
                     return true;
 
                 var loco = __instance.GetComponent<TrainCar>();
-                float cutoff = Mathf.Pow(__instance.cutoff.value, settings.cutoffGamma) * 0.85f;
+                //float cutoff = Mathf.Pow(__instance.cutoff.value, settings.cutoffGamma) * 0.85f;
+                float cutoff = settings.minCutoff + Mathf.Pow(__instance.cutoff.value, settings.cutoffGamma) * (settings.maxCutoff - settings.minCutoff);
                 HeadsUpDisplayBridge.instance?.UpdateCutoffSetting(loco, cutoff);
                 if (cutoff > 0)
                 {
@@ -258,7 +268,8 @@ namespace DvMod.SteamCutoff
                     float steamChestPressureRatio = boilerPressureRatio * __instance.regulator.value;
 
                     var chuff = __instance.GetComponent<ChuffController>();
-                    float powerRatio = PowerRatio(cutoff, __instance.speed.value, chuff.dbgCurrentRevolution);
+                    float powerRatio = PowerRatio(cutoff, __instance.speed.value, chuff.dbgCurrentRevolution, 
+                        Mathf.Max(__instance.temperature.value, BoilingPoint(__instance)));
                     __instance.power.SetNextValue(steamChestPressureRatio * powerRatio * SteamLocoSimulation.POWER_CONST_HP);
 
                     // USRA Light Mikado

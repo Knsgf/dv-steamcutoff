@@ -17,11 +17,23 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="0Harmony"/>
-    <Reference Include="Assembly-CSharp"/>
-    <Reference Include="UnityEngine.CoreModule"/>
-    <Reference Include="UnityEngine.IMGUIModule"/>
-    <Reference Include="UnityEngine.PhysicsModule"/>
-    <Reference Include="UnityModManager"/>
+    <Reference Include="0Harmony">
+      <HintPath>..\..\..\Desktop\UnityModManager\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>D:\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>D:\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>D:\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>D:\Steam\steamapps\common\Derail Valley\DerailValley_Data\Managed\UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityModManager">
+      <HintPath>..\..\..\Desktop\UnityModManager\UnityModManager.dll</HintPath>
+    </Reference>
   </ItemGroup>
 </Project>
