@@ -16,10 +16,6 @@ namespace DvMod.SteamCutoff
                 {
                     leverSpec.invertDirection ^= true;
                 }
-                else if (spec.name == "C draft" && spec is Puller pullerSpec)
-                {
-                    pullerSpec.invertDirection ^= true;
-                }
             }
         }
 
