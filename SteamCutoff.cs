@@ -158,7 +158,7 @@ namespace DvMod.SteamCutoff
                 FireState state = FireState.Instance(__instance);
 
                 // water heating
-                float waterAdded = __instance.boilerWater.nextValue - __instance.boilerWater.value; // L
+                float waterAdded = Mathf.Max(0f, __instance.boilerWater.nextValue - __instance.boilerWater.value); // L
                 float waterHeatingEnergy = (SteamTables.BoilingPoint(__instance.boilerPressure.value) - 15f) * waterAdded; // kJ
 
                 // heat from boiler
@@ -184,7 +184,6 @@ namespace DvMod.SteamCutoff
                 __instance.boilerPressure.AddNextValue(newPressure - __instance.boilerPressure.value);
                 // Main.DebugLog($"oldPressure={__instance.boilerPressure.value}, oldMass={boilerSteamMass}, newMass={boilerSteamMass + evaporationMass}, newPressure={newPressure}");
 
-                HeadsUpDisplayBridge.instance?.UpdateBoilerSteamVolume(loco, boilerSteamVolume);
                 HeadsUpDisplayBridge.instance?.UpdateBoilerSteamMass(loco, boilerSteamVolume * SteamTables.SteamDensity(__instance));
 
                 // steam release
@@ -193,12 +192,18 @@ namespace DvMod.SteamCutoff
 
                 // safety valve
                 const float SAFETY_VALVE_BLOWOFF = 0.2f; // 3 psi
+                var safetyValveCloseThreshold = settings.safetyValveThreshold - SAFETY_VALVE_BLOWOFF;
                 if (__instance.boilerPressure.value >= settings.safetyValveThreshold && __instance.safetyPressureValve.value == 0f)
                     __instance.safetyPressureValve.SetNextValue(1f);
-                else if (__instance.boilerPressure.value <= (settings.safetyValveThreshold - SAFETY_VALVE_BLOWOFF) && __instance.safetyPressureValve.value == 1f)
+                else if (__instance.boilerPressure.value <= safetyValveCloseThreshold && __instance.safetyPressureValve.value == 1f)
                     __instance.safetyPressureValve.SetNextValue(0f);
+
                 if ( __instance.safetyPressureValve.value == 1f)
-                    __instance.boilerPressure.AddNextValue(-10.0f * deltaTime);
+                {
+                    __instance.boilerPressure.AddNextValue(-50.0f * deltaTime);
+                    if (__instance.boilerPressure.nextValue < safetyValveCloseThreshold)
+                        __instance.boilerPressure.SetNextValue(safetyValveCloseThreshold);
+                }
 
                 // passive leakage
                 __instance.pressureLeakMultiplier = Mathf.Lerp(
@@ -348,7 +353,7 @@ namespace DvMod.SteamCutoff
                     return false;
                 }
                 __instance.tenderCoal.PassValueTo(__instance.coalbox, FireState.CoalChunkMass);
-                if (__instance.fireOn.value == 0f && __instance.temperature.value > 80f)
+                if (__instance.fireOn.value == 0f && __instance.temperature.value > 400f)
                 {
                     __instance.fireOn.SetValue(1f);
                 }
