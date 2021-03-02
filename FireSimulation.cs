@@ -74,9 +74,9 @@ namespace DvMod.SteamCutoff
         /// <summary>Airflow through stack due to natural convection in kg/s.</summary>
         /// Assuming 2m stack height, 0.5m stack radius, 3m overall height delta, 100 C in smokebox, 20 C at stack outlet.
         /// https://www.engineeringtoolbox.com/natural-draught-ventilation-d_122.html
-        private const float PassiveStackFlow = 0.1f;
+        private const float PassiveStackFlow = 0.6f;
         /// <summary>Mass ratio of air drawn in vs. high-pressure live or exhaust steam vented.</summary>
-        public const float DraftRatio = 2.0f;
+        public const float DraftRatio = 1.85f;
         /// <summary>Mass ratio of oxygen in atmospheric air.</summary>
         public const float OxygenRatio = 0.23f;
 
