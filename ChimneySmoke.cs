@@ -19,6 +19,7 @@ namespace DvMod.SteamCutoff
             public static IEnumerator UpdateSmokeParticles(SteamLocoChuffSmokeParticles __instance)
             {
                 WaitForSeconds waitTimeout = WaitFor.Seconds(0.2f);
+                yield return waitTimeout;
                 var loco = __instance.loco;
                 var sim = loco.sim;
                 var state = FireState.Instance(sim);
@@ -26,7 +27,7 @@ namespace DvMod.SteamCutoff
                 {
                     yield return waitTimeout;
 
-                    float volume = sim.fireOn.value > 0 ? state.oxygenSupply : 0;
+                    float volume = sim.fireOn.value > 0 ? (state.oxygenSupply -500f) / 1000f : 0;
                     float color = Mathf.Clamp01(2 - (2 * state.oxygenAvailability));
 
                     if (volume == 0f)

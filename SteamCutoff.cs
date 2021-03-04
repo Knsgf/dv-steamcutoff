@@ -208,54 +208,67 @@ namespace DvMod.SteamCutoff
                 float boilOffEnergy = SteamTables.SpecificEnthalpyOfVaporization(boilerPressure);
                 float excessEnergy = (currentWaterTemp - boilingTemp) * currentWaterMass * waterHeatCapacity + heatEnergyFromCoal;
                 float evaporatedMassLimit = excessEnergy / boilOffEnergy;
-                float minEvaporatedMass, maxEvaporatedMass;
-                if (evaporatedMassLimit >= 0f)
+                float evaporatedMass, newWaterLevel, newSteamPressure;
+                if (boilerPressure < 0.05f)
                 {
-                    minEvaporatedMass = 0f;
-                    maxEvaporatedMass = evaporatedMassLimit;
+                    evaporatedMass = evaporatedMassLimit;
+                    currentWaterMass -= evaporatedMassLimit;
+                    newWaterLevel = currentWaterMass / SteamTables.WaterDensityByTemp(currentWaterTemp);
+
+                    currentSteamMass += evaporatedMassLimit;
+                    newSteamPressure = 0.01f * STEAM_TEMP_COEFF * ((currentSteamMass * (currentWaterTemp + 273.15f)) / BoilerSteamVolume(newWaterLevel)) - 1.01325f;
+
+                    if (waterTempStored)
+                        waterTemp.Remove(__instance);
                 }
                 else
                 {
-                    minEvaporatedMass = evaporatedMassLimit;
-                    maxEvaporatedMass = 0f;
-                }
-                float testEvaporatedMass = 0.5f * evaporatedMassLimit;
-                float newWaterLevel, newSteamPressure;
-                int iterations = 0;
-                while (true)
-                {
-                    float testWaterMass = currentWaterMass - testEvaporatedMass;
-                    float testWaterTemp = currentWaterTemp + (heatEnergyFromCoal - testEvaporatedMass * boilOffEnergy) / (currentWaterMass * waterHeatCapacity);
-                    float testWaterLevel = testWaterMass / SteamTables.WaterDensityByTemp(testWaterTemp);
-
-                    float testSteamMass = currentSteamMass + testEvaporatedMass;
-                    float testSteamPressure = 0.01f * STEAM_TEMP_COEFF * ((testSteamMass * (testWaterTemp + 273.15f)) / BoilerSteamVolume(testWaterLevel)) - 1.01325f;
-
-                    if (++iterations >= 10 || maxEvaporatedMass - minEvaporatedMass <= 0.01f * Mathf.Abs(testEvaporatedMass))
+                    float minEvaporatedMass, maxEvaporatedMass;
+                    if (evaporatedMassLimit >= 0f)
                     {
-                        currentWaterTemp = testWaterTemp;
-                        newWaterLevel = testWaterLevel;
-                        currentSteamMass = testSteamMass;
-                        newSteamPressure = testSteamPressure;
-                        break;
+                        minEvaporatedMass = 0f;
+                        maxEvaporatedMass = evaporatedMassLimit;
+                    }
+                    else
+                    {
+                        minEvaporatedMass = evaporatedMassLimit;
+                        maxEvaporatedMass = 0f;
+                    }
+                    float testEvaporatedMass = 0.5f * evaporatedMassLimit;
+                    int iterations = 0;
+                    while (true)
+                    {
+                        float testWaterMass = currentWaterMass - testEvaporatedMass;
+                        float testWaterTemp = currentWaterTemp + (heatEnergyFromCoal - testEvaporatedMass * boilOffEnergy) / (currentWaterMass * waterHeatCapacity);
+                        float testWaterLevel = testWaterMass / SteamTables.WaterDensityByTemp(testWaterTemp);
+
+                        float testSteamMass = currentSteamMass + testEvaporatedMass;
+                        float testSteamPressure = 0.01f * STEAM_TEMP_COEFF * ((testSteamMass * (testWaterTemp + 273.15f)) / BoilerSteamVolume(testWaterLevel)) - 1.01325f;
+
+                        if (++iterations >= 10 || maxEvaporatedMass - minEvaporatedMass <= 0.01f * Mathf.Abs(testEvaporatedMass))
+                        {
+                            evaporatedMass = testEvaporatedMass;
+                            currentWaterTemp = testWaterTemp;
+                            newWaterLevel = testWaterLevel;
+                            currentSteamMass = testSteamMass;
+                            newSteamPressure = testSteamPressure;
+                            break;
+                        }
+
+                        if (testWaterTemp < SteamTables.BoilingPoint(testSteamPressure))
+                            maxEvaporatedMass = testEvaporatedMass;
+                        else
+                            minEvaporatedMass = testEvaporatedMass;
+                        testEvaporatedMass = 0.5f * (minEvaporatedMass + maxEvaporatedMass);
                     }
 
-                    if (testWaterTemp < SteamTables.BoilingPoint(testSteamPressure))
-                        maxEvaporatedMass = testEvaporatedMass;
-                    else
-                        minEvaporatedMass = testEvaporatedMass;
-                    testEvaporatedMass = 0.5f * (minEvaporatedMass + maxEvaporatedMass);
+                    waterTemp[__instance] = currentWaterTemp;
                 }
 
                 __instance.boilerWater.AddNextValue(newWaterLevel - boilerWaterAmount);
                 __instance.boilerPressure.AddNextValue(newSteamPressure - boilerPressure);
 
-                if (newSteamPressure >= 1f)
-                    waterTemp[__instance] = currentWaterTemp;
-                else if (waterTempStored)
-                    waterTemp.Remove(__instance);
-
-                HeadsUpDisplayBridge.instance?.UpdateWaterEvap(loco, testEvaporatedMass / (deltaTime / __instance.timeMult));
+                HeadsUpDisplayBridge.instance?.UpdateWaterEvap(loco, evaporatedMass / (deltaTime / __instance.timeMult));
                 HeadsUpDisplayBridge.instance?.UpdateBoilerSteamMass(loco, currentSteamMass);
 
                 // steam release
@@ -272,7 +285,7 @@ namespace DvMod.SteamCutoff
 
                 if ( __instance.safetyPressureValve.value == 1f)
                 {
-                    __instance.boilerPressure.AddNextValue(-50.0f * deltaTime);
+                    __instance.boilerPressure.AddNextValue(-2f * __instance.boilerPressure.value * deltaTime);
                     if (__instance.boilerPressure.nextValue < safetyValveCloseThreshold)
                         __instance.boilerPressure.SetNextValue(safetyValveCloseThreshold);
                 }
